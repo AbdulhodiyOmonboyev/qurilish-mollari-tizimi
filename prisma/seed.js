@@ -17,13 +17,13 @@ async function main() {
   await prisma.partner.deleteMany();
   await prisma.user.deleteMany();
 
-  console.log("Boshlang'ich ma'lumotlar kiritilmoqda...");
+  console.log("Toza va real ma'lumotlar kiritilmoqda...");
 
   // 1. Admin va Xodim Foydalanuvchilar (Bcrypt bilan xeshlangan parol)
   const adminPasswordHash = await bcrypt.hash("admin123", 10);
   const cashierPasswordHash = await bcrypt.hash("kassir123", 10);
 
-  const adminUser = await prisma.user.create({
+  await prisma.user.create({
     data: {
       username: "admin",
       passwordHash: adminPasswordHash,
@@ -52,44 +52,44 @@ async function main() {
     { name: "Ish haqi (Oylik)" },
     { name: "Transport va logistika" },
     { name: "Kommunal to'lovlar" },
-    { name: "Soliq va litsenziya" },
+    { name: "Oziq-ovqat va tushlik" },
     { name: "Boshqa xarajatlar" },
   ];
   for (const cat of expCategories) {
     await prisma.expenseCategory.create({ data: cat });
   }
 
-  // 3. Hamkorlar (Do'konlar, Ta'minotchilar)
-  const p1 = await prisma.partner.create({
+  // 3. Hamkorlar (Do'konlar, Ta'minotchilar - boshlang'ich qarzi 0)
+  await prisma.partner.create({
     data: {
       name: "Usta Jasur (Sergeli)",
       type: "STORE_CLIENT",
       phone: "+998901112233",
-      address: "Toshkent sh., Sergeli tumani, 4-mavze",
-      totalDebt: 3200000,
-      note: "Doimiy usta, nasiyaga oladi",
+      address: "Toshkent sh., Sergeli tumani",
+      totalDebt: 0,
+      note: "Doimiy usta",
     },
   });
 
-  const p2 = await prisma.partner.create({
+  await prisma.partner.create({
     data: {
       name: "Farhod Qurilish Do'koni",
       type: "STORE_CLIENT",
       phone: "+998935554433",
-      address: "Toshkent sh., Uchtepa, Farhod bozori 12-do'kon",
-      totalDebt: 7500000,
-      note: "Katta hajmda oladigan hamkor do'kon",
+      address: "Toshkent sh., Uchtepa, Farhod bozori",
+      totalDebt: 0,
+      note: "Hamkor do'kon",
     },
   });
 
-  const p3 = await prisma.partner.create({
+  await prisma.partner.create({
     data: {
-      name: "Bekzod Ta'minotchi (Bekobod Sement)",
+      name: "Bekobod Sement Zavodi",
       type: "SUPPLIER",
       phone: "+998977778899",
       address: "Bekobod sh.",
       totalDebt: 0,
-      note: "Sement yetkazib beruvchi zavod vakili",
+      note: "Sement yetkazib beruvchi ta'minotchi",
     },
   });
 
@@ -142,7 +142,15 @@ async function main() {
     },
   });
 
-  // 5. Tovarlar (Products)
+  const catTom = await prisma.category.create({
+    data: {
+      name: "Tom va Devor Qoplamalari",
+      slug: "tom-devor-qoplamalari",
+      description: "Gipsokarton, shifer, profnastil, mix va samorezlar",
+    },
+  });
+
+  // 5. Tovarlar (Products) - Yuqori sifatli rasmlar bilan
   const productsData = [
     {
       categoryId: catSement.id,
@@ -152,9 +160,10 @@ async function main() {
       unit: "qop",
       costPrice: 58000,
       salePrice: 68000,
-      stockQuantity: 240,
+      stockQuantity: 350,
       minStockAlert: 50,
-      description: "Yuqori sifatli Bekobod M-400 markali sement",
+      imageUrl: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=600&auto=format&fit=crop&q=80",
+      description: "Yuqori sifatli Bekobod M-400 markali sement, poydevor va quyma ishlariga mos",
     },
     {
       categoryId: catSement.id,
@@ -164,21 +173,23 @@ async function main() {
       unit: "qop",
       costPrice: 18000,
       salePrice: 24000,
-      stockQuantity: 45,
+      stockQuantity: 60,
       minStockAlert: 20,
-      description: "Oqartirish va qurilish uchun ohak",
+      imageUrl: "https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?w=600&auto=format&fit=crop&q=80",
+      description: "Oqartirish va qurilish qorishmalari uchun yuqori sifatli ohak",
     },
     {
       categoryId: catGisht.id,
-      name: "Pishgan g'isht (Standart)",
+      name: "Pishgan g'isht (Standart M-100)",
       code: "GSHT-PISH",
       barcode: "478001234003",
       unit: "dona",
       costPrice: 950,
       salePrice: 1300,
-      stockQuantity: 8500,
+      stockQuantity: 12000,
       minStockAlert: 2000,
-      description: "Sifatli pishiq g'isht, devorlar uchun",
+      imageUrl: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=600&auto=format&fit=crop&q=80",
+      description: "Mustahkam va tekis qizil pishiq g'isht, ko'p qavatli va hovli devorlariga",
     },
     {
       categoryId: catGisht.id,
@@ -188,21 +199,23 @@ async function main() {
       unit: "dona",
       costPrice: 16500,
       salePrice: 21000,
-      stockQuantity: 18,
+      stockQuantity: 450,
       minStockAlert: 50,
-      description: "Issiqlik saqlovchi yengil gazoblok",
+      imageUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80",
+      description: "Issiqlik va shovqin o'tkazmaydigan avtoklav gazobeton blok",
     },
     {
       categoryId: catQorishma.id,
-      name: "Knauf Rotband Shpatlyovka (30 kg)",
+      name: "Knauf Rotband Suvoq (30 kg)",
       code: "KNF-ROTB-30",
       barcode: "478001234005",
       unit: "qop",
       costPrice: 54000,
       salePrice: 65000,
-      stockQuantity: 120,
-      minStockAlert: 25,
-      description: "Gipsli universal suvoq qorishmasi",
+      stockQuantity: 180,
+      minStockAlert: 30,
+      imageUrl: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&auto=format&fit=crop&q=80",
+      description: "Gipsli universal shuvoq qorishmasi, ichki devorlarni silliqlash uchun",
     },
     {
       categoryId: catQorishma.id,
@@ -212,9 +225,10 @@ async function main() {
       unit: "qop",
       costPrice: 32000,
       salePrice: 42000,
-      stockQuantity: 85,
-      minStockAlert: 20,
-      description: "Ichki va tashqi kafel terish uchun yelim",
+      stockQuantity: 140,
+      minStockAlert: 25,
+      imageUrl: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600&auto=format&fit=crop&q=80",
+      description: "Ichki va tashqi keramik kafel terish uchun o'ta chidamli yelim",
     },
     {
       categoryId: catMetall.id,
@@ -224,9 +238,10 @@ async function main() {
       unit: "metr",
       costPrice: 8200,
       salePrice: 10500,
-      stockQuantity: 1400,
-      minStockAlert: 300,
-      description: "O'zmetkombinat 12mm mustahkam armatura",
+      stockQuantity: 2500,
+      minStockAlert: 400,
+      imageUrl: "https://images.unsplash.com/photo-1535813547-99c456a41d4a?w=600&auto=format&fit=crop&q=80",
+      description: "O'zmetkombinat zavodida ishlab chiqarilgan 12mm mustahkam riblyoniy armatura",
     },
     {
       categoryId: catMetall.id,
@@ -236,9 +251,10 @@ async function main() {
       unit: "metr",
       costPrice: 18000,
       salePrice: 23500,
-      stockQuantity: 8,
-      minStockAlert: 50,
-      description: "Karkas va darvoza uchun metall profil",
+      stockQuantity: 320,
+      minStockAlert: 60,
+      imageUrl: "https://images.unsplash.com/photo-1533750349088-cd871a92f312?w=600&auto=format&fit=crop&q=80",
+      description: "Karkas, bostirma va darvozalar uchun to'rtburchak po'lat profil",
     },
     {
       categoryId: catBoyoq.id,
@@ -248,9 +264,10 @@ async function main() {
       unit: "dona",
       costPrice: 140000,
       salePrice: 185000,
-      stockQuantity: 32,
+      stockQuantity: 45,
       minStockAlert: 10,
-      description: "Yomg'ir va quyoshga chidamli fasad bo'yog'i",
+      imageUrl: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=600&auto=format&fit=crop&q=80",
+      description: "Yomg'ir, qor va oftobga chidamli yuqori qoplovchan oq fasad bo'yog'i",
     },
     {
       categoryId: catSantexnika.id,
@@ -260,9 +277,49 @@ async function main() {
       unit: "dona",
       costPrice: 24000,
       salePrice: 34000,
-      stockQuantity: 90,
+      stockQuantity: 110,
       minStockAlert: 20,
-      description: "Issiq va sovuq suv uchun bosimli quvur",
+      imageUrl: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=600&auto=format&fit=crop&q=80",
+      description: "Ichimlik suvi va isitish tizimi uchun 25mm bosimli plastik quvur",
+    },
+    {
+      categoryId: catTom.id,
+      name: "Knauf Gipsokarton 9.5 mm (1.2x2.5 m)",
+      code: "GPS-95",
+      barcode: "478001234011",
+      unit: "dona",
+      costPrice: 38000,
+      salePrice: 48000,
+      stockQuantity: 210,
+      minStockAlert: 40,
+      imageUrl: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=600&auto=format&fit=crop&q=80",
+      description: "Shift va devorlarni qoplash uchun Knauf gipsokarton listi",
+    },
+    {
+      categoryId: catTom.id,
+      name: "Shifer 8 to'lqinli (1.75x1.13 m)",
+      code: "SHIF-8",
+      barcode: "478001234012",
+      unit: "dona",
+      costPrice: 52000,
+      salePrice: 65000,
+      stockQuantity: 160,
+      minStockAlert: 30,
+      imageUrl: "https://images.unsplash.com/photo-1628744448840-55bdb2497bd4?w=600&auto=format&fit=crop&q=80",
+      description: "Tom yopish uchun mustahkam 8 to'lqinli asbest sement shifer",
+    },
+    {
+      categoryId: catTom.id,
+      name: "Samorez qora 3.5x35 mm (1000 dona)",
+      code: "SAM-35",
+      barcode: "478001234013",
+      unit: "quti",
+      costPrice: 35000,
+      salePrice: 48000,
+      stockQuantity: 75,
+      minStockAlert: 15,
+      imageUrl: "https://images.unsplash.com/photo-1586864387967-d02ef85d93e8?w=600&auto=format&fit=crop&q=80",
+      description: "Gipsokarton va yog'och mahkamlash uchun po'lat qora samorez",
     },
   ];
 
@@ -281,113 +338,7 @@ async function main() {
     });
   }
 
-  // 6. Sinov arizalari (Applications)
-  await prisma.application.create({
-    data: {
-      fullName: "Sardor Rahimov",
-      phone: "+998909876543",
-      organization: "Yangi Chilonzor Ko'p Qavatli Uy",
-      address: "Toshkent sh., Chilonzor 9-mavze",
-      requestedItems: "500 qop M-400 sement, 1500 dona gazoblok, 2 tonna armatura 12mm",
-      note: "Ulgurji narx va yetkazib berish bo'yicha hisob-faktura kerak",
-      status: "YANGI",
-    },
-  });
-
-  await prisma.application.create({
-    data: {
-      fullName: "Muzaffar Qurilish MChJ",
-      phone: "+998971234567",
-      organization: "Muzaffar Stroy",
-      address: "Zangiota tumani",
-      requestedItems: "Kafel yelimi 100 qop, Rotband 80 qop",
-      note: "Doimiy ta'minot bo'yicha shartnoma qilmoqchimiz",
-      status: "ALOQADA",
-      adminNote: "Mijoz bilan bog'lanildi, narxlar yuborildi",
-    },
-  });
-
-  // 7. Savdo va Nasiya
-  const sement = await prisma.product.findFirst({ where: { code: "SEM-400-50" } });
-  const rotband = await prisma.product.findFirst({ where: { code: "KNF-ROTB-30" } });
-
-  const order1 = await prisma.order.create({
-    data: {
-      orderNumber: "ORD-" + Date.now().toString().slice(-6),
-      partnerId: p2.id,
-      source: "POS",
-      status: "COMPLETED",
-      totalAmount: 4600000,
-      totalCost: 3880000,
-      paidAmount: 1600000,
-      debtAmount: 3000000,
-      paymentStatus: "PARTIAL",
-      paymentMethod: "MIXED",
-      customerName: "Farhod Qurilish Do'koni",
-      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-      note: "50 qop sement, 20 qop rotband nasiyaga berildi",
-      items: {
-        create: [
-          {
-            productId: sement.id,
-            productName: sement.name,
-            unit: sement.unit,
-            quantity: 50,
-            costPrice: sement.costPrice,
-            unitPrice: sement.salePrice,
-            totalPrice: 50 * sement.salePrice,
-          },
-          {
-            productId: rotband.id,
-            productName: rotband.name,
-            unit: rotband.unit,
-            quantity: 20,
-            costPrice: rotband.costPrice,
-            unitPrice: rotband.salePrice,
-            totalPrice: 20 * rotband.salePrice,
-          },
-        ],
-      },
-    },
-  });
-
-  await prisma.debtPayment.create({
-    data: {
-      partnerId: p2.id,
-      orderId: order1.id,
-      amount: 1600000,
-      paymentMethod: "CASH",
-      note: "Buyurtma paytida naqd to'landi",
-    },
-  });
-
-  // 8. Chiqimlar
-  const ijaraCat = await prisma.expenseCategory.findFirst({ where: { name: "Do'kon/Ombor ijarasi" } });
-  const transportCat = await prisma.expenseCategory.findFirst({ where: { name: "Transport va logistika" } });
-
-  if (ijaraCat) {
-    await prisma.expense.create({
-      data: {
-        categoryId: ijaraCat.id,
-        amount: 2500000,
-        paymentMethod: "TRANSFER",
-        note: "Omborning oylik ijara to'lovi",
-      },
-    });
-  }
-
-  if (transportCat) {
-    await prisma.expense.create({
-      data: {
-        categoryId: transportCat.id,
-        amount: 350000,
-        paymentMethod: "CASH",
-        note: "Zavoddan sement keltirish yuk mashinasi yoqilg'isi",
-      },
-    });
-  }
-
-  console.log("PostgreSQL bazasiga barcha ma'lumotlar muvaffaqiyatli kiritildi!");
+  console.log("✅ Toza ma'lumotlar va barcha tovarlar rasmlari muvaffaqiyatli kiritildi!");
 }
 
 main()

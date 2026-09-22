@@ -3,6 +3,7 @@ const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const fs = require("fs");
 const path = require("path");
+const { parseVoiceExpense } = require("./voice-ai");
 require("dotenv").config();
 
 const prisma = new PrismaClient();
@@ -201,7 +202,7 @@ bot.hears(["📊 Bugungi Hisobot", "🔄 Yangilash"], async (ctx) => {
       `👤 *Foydalanuvchi:* ${authUser.fullName} (${authUser.role})\n`;
 
     if (authUser.role !== "CASHIER") {
-      msg += `\n💡 _Tezkor chiqim kiritish uchun:_\n\`/chiqim <summa> <izoh>\``;
+      msg += `\n🎙️ _Ovozli chiqim:_ Ovozli xabar (golosovoy) yuboring\n✍️ _Matnli chiqim:_ \`/chiqim <summa> <izoh>\``;
     }
 
     await ctx.reply(msg, { parse_mode: "Markdown" });
@@ -388,6 +389,110 @@ bot.command("chiqim", async (ctx) => {
   } catch (e) {
     console.error(e);
     await ctx.reply("Chiqimni saqlashda xatolik.");
+  }
+});
+
+// Ovozli xabarlar (Golosovoy) orqali AI bilan xarajat kiritish
+bot.on(["message:voice", "message:audio"], async (ctx) => {
+  const userId = ctx.from?.id.toString();
+  const authUser = getAuthUser(userId);
+
+  if (!authUser) {
+    await ctx.reply(
+      "⚠️ Ovozli xabar orqali xarajat kiritish uchun avval tizimga kiring: /start",
+      { reply_markup: getLoginKeyboard() }
+    );
+    return;
+  }
+
+  if (authUser.role === "CASHIER") {
+    await ctx.reply("🚫 Chiqim kiritish huquqi faqat Admin va Menejerlarga berilgan.");
+    return;
+  }
+
+  const statusMsg = await ctx.reply(
+    "🎙️ Ovozli xabar qabul qilindi. AI orqali tinglanmoqda va tahlil qilinmoqda... ⏳"
+  );
+
+  try {
+    const voice = ctx.message.voice || ctx.message.audio;
+    const file = await ctx.getFile();
+    const fileUrl = `https://api.telegram.org/file/bot${token}/${file.file_path}`;
+
+    const fileRes = await fetch(fileUrl);
+    const arrayBuf = await fileRes.arrayBuffer();
+    const audioBuffer = Buffer.from(arrayBuf);
+    const mimeType = voice.mime_type || "audio/ogg";
+
+    const result = await parseVoiceExpense(audioBuffer, mimeType, ctx.message.caption);
+
+    if (result.error === "NO_AI_KEY") {
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        statusMsg.message_id,
+        `🎙️ *Ovozli xabaringiz qabul qilindi!*\n\n` +
+        `Ovozni avtomatik eshitib, xarajatga qo'shish uchun bepul *Google Gemini API Key* kerak bo'ladi.\n\n` +
+        `💡 *1 daqiqada ulash tartibi:*\n` +
+        `1. [aistudio.google.com](https://aistudio.google.com) saytidan bepul Gemini API key oling.\n` +
+        `2. Render yoki \`.env\` fayliga \`GEMINI_API_KEY\` qilib qo'shing.\n\n` +
+        `Hozircha xarajatni matn ko'rinishida ham kiritishingiz mumkin:\n\`/chiqim <summa> <izoh>\``,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    if (!result.amount || result.amount <= 0) {
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        statusMsg.message_id,
+        `🎙️ *Ovozli xabar matni:* \n"${result.transcript}"\n\n` +
+        `⚠️ Xabardan xarajat summasi aniqlanmadi. Iltimos, summani aniq aytib qaytadan ovoz yuboring (masalan: *"Bugun tushlikka 120 ming berdik"*).\n\nYoki buyruq orqali kiritishingiz mumkin:\n\`/chiqim <summa> <izoh>\``,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    // Kategoriyani topish yoki yaratish
+    let cat = await prisma.expenseCategory.findFirst({
+      where: { name: result.category },
+    });
+
+    if (!cat) {
+      cat = await prisma.expenseCategory.findFirst({
+        where: { name: "Boshqa xarajatlar" },
+      });
+    }
+
+    // Chiqimni saqlash
+    await prisma.expense.create({
+      data: {
+        categoryId: cat ? cat.id : undefined,
+        amount: result.amount,
+        paymentMethod: "CASH",
+        note: `${result.note} [Ovozli AI: "${result.transcript}"]`,
+        date: new Date(),
+      },
+    });
+
+    await ctx.api.editMessageText(
+      ctx.chat.id,
+      statusMsg.message_id,
+      `🎙️ *Ovozli xabar eshitildi:*\n"${result.transcript}"\n\n` +
+      `✅ *Chiqim tizimga muvaffaqiyatli saqlandi!*\n` +
+      `💰 Summa: *${formatMoney(result.amount)}*\n` +
+      `📁 Kategoriya: *${cat ? cat.name : result.category}*\n` +
+      `📝 Izoh: ${result.note}\n` +
+      `🤖 AI Dvigateli: ${result.engine || "AI Voice"}\n` +
+      `👤 Mas'ul: ${authUser.fullName}`,
+      { parse_mode: "Markdown" }
+    );
+  } catch (err) {
+    console.error("Ovozli xabarni tahlil qilishda xatolik:", err);
+    await ctx.api.editMessageText(
+      ctx.chat.id,
+      statusMsg.message_id,
+      `❌ Ovozli xabarni tahlil qilishda xatolik yuz berdi: ${err.message}`
+    );
   }
 });
 

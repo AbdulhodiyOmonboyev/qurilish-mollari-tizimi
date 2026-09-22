@@ -370,20 +370,40 @@ export default function ShopPage() {
                   isOutOfStock ? "border-slate-200 opacity-75" : "border-slate-200 hover:border-emerald-500"
                 }`}
               >
-                {/* Badge */}
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">
+                {/* Product Image */}
+                <div className="w-full h-44 rounded-2xl bg-slate-100 overflow-hidden relative mb-3 group/img">
+                  {p.imageUrl ? (
+                    <img
+                      src={p.imageUrl}
+                      alt={p.name}
+                      loading="lazy"
+                      className="w-full h-full object-cover group-hover/img:scale-105 transition duration-300"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 text-slate-400">
+                      <Package className="w-10 h-10 stroke-[1.5] text-slate-300" />
+                      <span className="text-[10px] text-slate-400 mt-1">{p.category?.name}</span>
+                    </div>
+                  )}
+                  {/* Stock pill overlay */}
+                  <div className="absolute top-2.5 right-2.5">
+                    {isOutOfStock ? (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/90 backdrop-blur-xs text-white shadow-xs">
+                        Sotuvda yo'q
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-600/90 backdrop-blur-xs text-white shadow-xs">
+                        {p.stockQuantity} {p.unit}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Category name */}
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 truncate">
                     {p.category?.name}
                   </span>
-                  {isOutOfStock ? (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
-                      Sotuvda yo'q
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      Omborda: {p.stockQuantity} {p.unit}
-                    </span>
-                  )}
                 </div>
 
                 {/* Info */}

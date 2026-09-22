@@ -14,6 +14,7 @@ import {
   X,
   Edit2,
   Check,
+  Package,
 } from "lucide-react";
 
 export default function InventoryPage() {
@@ -45,6 +46,7 @@ export default function InventoryPage() {
     stockQuantity: "",
     minStockAlert: "10",
     description: "",
+    imageUrl: "",
   });
 
   const [stockInData, setStockInData] = useState({
@@ -107,6 +109,7 @@ export default function InventoryPage() {
           stockQuantity: "",
           minStockAlert: "10",
           description: "",
+          imageUrl: "",
         });
         loadData();
       } else {
@@ -298,9 +301,20 @@ export default function InventoryPage() {
                   return (
                     <tr key={p.id} className="hover:bg-slate-50/75 transition">
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-slate-900">{p.name}</div>
-                        <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                          {p.code ? `SKU: ${p.code}` : ""} {p.barcode ? `| Barkod: ${p.barcode}` : ""}
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center">
+                            {p.imageUrl ? (
+                              <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <Package className="w-5 h-5 text-slate-400" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-bold text-slate-900">{p.name}</div>
+                            <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                              {p.code ? `SKU: ${p.code}` : ""} {p.barcode ? `| Barkod: ${p.barcode}` : ""}
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td className="py-3.5 px-3 text-slate-600 font-medium">
@@ -500,6 +514,17 @@ export default function InventoryPage() {
                     className="w-full px-3 py-2 border rounded-xl focus:border-emerald-500 focus:outline-none"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Rasm Havolasi (URL)</label>
+                <input
+                  type="text"
+                  value={formData.imageUrl}
+                  onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                  placeholder="https://... rasm havolasi (ixtiyoriy)"
+                  className="w-full px-3 py-2 border rounded-xl focus:border-emerald-500 focus:outline-none"
+                />
               </div>
 
               <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
