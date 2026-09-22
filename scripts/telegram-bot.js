@@ -1,5 +1,6 @@
 const { Bot, InlineKeyboard, Keyboard } = require("grammy");
 const { PrismaClient } = require("@prisma/client");
+const bcrypt = require("bcryptjs");
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
@@ -8,12 +9,31 @@ const prisma = new PrismaClient();
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
 const adminFilePath = path.join(__dirname, "admin_id.txt");
-let adminId = process.env.ADMIN_TELEGRAM_ID;
+const sessionsFilePath = path.join(__dirname, "bot_sessions.json");
 
+let adminId = process.env.ADMIN_TELEGRAM_ID;
 if (!adminId && fs.existsSync(adminFilePath)) {
   try {
     adminId = fs.readFileSync(adminFilePath, "utf-8").trim();
   } catch (e) {}
+}
+
+// Bot sessiyalarini fayldan o'qish va saqlash
+let sessions = {};
+try {
+  if (fs.existsSync(sessionsFilePath)) {
+    sessions = JSON.parse(fs.readFileSync(sessionsFilePath, "utf-8"));
+  }
+} catch (e) {
+  sessions = {};
+}
+
+function saveSessions() {
+  try {
+    fs.writeFileSync(sessionsFilePath, JSON.stringify(sessions, null, 2));
+  } catch (e) {
+    console.error("Sessiyani saqlashda xatolik:", e);
+  }
 }
 
 if (!token || token === "YOUR_TELEGRAM_BOT_TOKEN_HERE") {
@@ -38,77 +58,108 @@ function getAdminKeyboard() {
     .text("📑 Do'konlar Qarzi")
     .text("📦 Ombor Holati")
     .row()
-    .text("🛒 Onlayn Do'kon")
     .text("🔄 Yangilash")
+    .text("🚪 Chiqish")
     .resized();
 }
 
-function getClientKeyboard() {
+function getCashierKeyboard() {
   return new Keyboard()
-    .text("📦 Mahsulotlar Katalogi")
-    .text("🛒 Onlayn Do'kon")
+    .text("📊 Bugungi Hisobot")
+    .text("⚠️ Kam qolgan tovarlar")
     .row()
-    .text("📞 Aloqa va Manzil")
-    .text("🔐 Admin Rejimi")
+    .text("📦 Ombor Holati")
+    .text("🔄 Yangilash")
+    .row()
+    .text("🚪 Chiqish")
     .resized();
 }
 
-// Start command
+function getLoginKeyboard() {
+  return new Keyboard().text("🔐 Tizimga Kirish").resized();
+}
+
+// Foydalanuvchi tizimga kirganligini tekshirish
+function getAuthUser(userId) {
+  const s = sessions[userId];
+  if (s && s.step === "AUTHENTICATED" && s.user) {
+    return s.user;
+  }
+  return null;
+}
+
+// Start komandasi
 bot.command("start", async (ctx) => {
   const userId = ctx.from?.id.toString();
+  const authUser = getAuthUser(userId);
 
-  // Agar admin hali belgilanmagan bo'lsa, birinchi start bosgan odam avtomatik admin bo'ladi
-  if (!adminId) {
-    adminId = userId;
-    try {
-      fs.writeFileSync(adminFilePath, userId);
-    } catch (e) {}
+  if (authUser) {
+    const kb = authUser.role === "CASHIER" ? getCashierKeyboard() : getAdminKeyboard();
+    await ctx.reply(
+      `Assalomu alaykum, ${authUser.fullName}! 👋\n` +
+      `Siz tizimda *${authUser.role}* sifatida faolsiz.\n\n` +
+      `Quyidagi menyu orqali amallarni bajarishingiz mumkin:`,
+      { reply_markup: kb, parse_mode: "Markdown" }
+    );
+    return;
   }
 
-  const isAdmin = adminId && userId === adminId.toString();
-
-  if (isAdmin) {
-    await ctx.reply(
-      `Assalomu alaykum, Xo'jayin! 🏪\n\nQurilish Mollari Boshqaruv Botingizga xush kelibsiz.\nSiz tizimda ADMIN sifatida biriktirildingiz (ID: ${userId}).\n\nQuyidagi menyu orqali do'koningizni to'liq boshqarishingiz mumkin:`,
-      { reply_markup: getAdminKeyboard() }
-    );
-  } else {
-    await ctx.reply(
-      `Assalomu alaykum! Qurilish mollari do'konimizga xush kelibsiz! 🏗\n\nBu yerda siz tovarlar katalogi, narxlar va mavjud qoldiqlarni bilib olishingiz mumkin.`,
-      { reply_markup: getClientKeyboard() }
-    );
-  }
-});
-
-// Admin rejimiga o'tish
-bot.hears("🔐 Admin Rejimi", async (ctx) => {
-  const userId = ctx.from?.id.toString();
-  adminId = userId;
-  try {
-    fs.writeFileSync(adminFilePath, userId);
-  } catch (e) {}
+  // Agar kirilmagan bo'lsa, logindan boshlash
+  sessions[userId] = { step: "WAITING_FOR_USERNAME" };
+  saveSessions();
 
   await ctx.reply(
-    `✅ Siz ADMIN sifatida tanildingiz! (ID: ${userId})\nEndi boshqaruv menyusidan foydalanishingiz mumkin:`,
-    { reply_markup: getAdminKeyboard() }
+    `Assalomu alaykum! 🏪\n*Qurilish Mollari Boshqaruv Botiga* xush kelibsiz.\n\n` +
+    `⚠️ Ushbu bot yopiq tizim hisoblanadi. Undan foydalanish uchun admin tomonidan ochib berilgan hisobingiz bilan kirishingiz kerak.\n\n` +
+    `👤 *1-qadam:* Iltimos, *Foydalanuvchi Loginingizni (Username)* kiriting:\n_(Masalan: admin yoki kassir1)_`,
+    { parse_mode: "Markdown", reply_markup: { remove_keyboard: true } }
   );
 });
 
-bot.command("admin", async (ctx) => {
+// Chiqish (Logout) komandasi
+bot.command("logout", async (ctx) => {
   const userId = ctx.from?.id.toString();
-  adminId = userId;
-  try {
-    fs.writeFileSync(adminFilePath, userId);
-  } catch (e) {}
+  delete sessions[userId];
+  saveSessions();
 
   await ctx.reply(
-    `✅ Boshqaruv menyusi faollashtirildi!`,
-    { reply_markup: getAdminKeyboard() }
+    `👋 Tizimdan muvaffaqiyatli chiqdingiz.\nQaytadan kirish uchun "🔐 Tizimga Kirish" tugmasini bosing yoki /start yozing.`,
+    { reply_markup: getLoginKeyboard() }
   );
 });
 
-// Bugungi hisobot (Admin)
+bot.hears("🚪 Chiqish", async (ctx) => {
+  const userId = ctx.from?.id.toString();
+  delete sessions[userId];
+  saveSessions();
+
+  await ctx.reply(
+    `👋 Tizimdan muvaffaqiyatli chiqdingiz.\nQaytadan kirish uchun "🔐 Tizimga Kirish" tugmasini bosing yoki /start yozing.`,
+    { reply_markup: getLoginKeyboard() }
+  );
+});
+
+bot.hears("🔐 Tizimga Kirish", async (ctx) => {
+  const userId = ctx.from?.id.toString();
+  sessions[userId] = { step: "WAITING_FOR_USERNAME" };
+  saveSessions();
+
+  await ctx.reply(
+    `👤 Iltimos, *Foydalanuvchi Loginingizni (Username)* kiriting:`,
+    { parse_mode: "Markdown", reply_markup: { remove_keyboard: true } }
+  );
+});
+
+// Bugungi hisobot
 bot.hears(["📊 Bugungi Hisobot", "🔄 Yangilash"], async (ctx) => {
+  const userId = ctx.from?.id.toString();
+  const authUser = getAuthUser(userId);
+
+  if (!authUser) {
+    await ctx.reply("⚠️ Avval tizimga kiring. /start buyrug'ini bosing.");
+    return;
+  }
+
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -130,18 +181,28 @@ bot.hears(["📊 Bugungi Hisobot", "🔄 Yangilash"], async (ctx) => {
     const cashCollected = orders.reduce((sum, o) => sum + o.paidAmount, 0);
     const debtGiven = orders.reduce((sum, o) => sum + o.debtAmount, 0);
 
-    const msg =
+    let msg =
       `📊 *BUGUNGI SAVDO VA MOLIYA HISOBOTI*\n` +
       `📅 Sana: ${new Date().toLocaleDateString("uz-UZ")}\n\n` +
       `💰 *Jami Savdo (Kirim):* ${formatMoney(totalRevenue)}\n` +
       `💵 *Kassaga tushgan naqd:* ${formatMoney(cashCollected)}\n` +
       `📝 *Nasiyaga berilgan:* ${formatMoney(debtGiven)}\n` +
-      `📦 *Sotilgan tovar tannarxi:* ${formatMoney(totalCost)}\n` +
-      `📉 *Bugungi chiqimlar:* ${formatMoney(totalExpenses)}\n` +
-      `------------------------------------\n` +
-      `💎 *SOF FOYDA:* ${formatMoney(netProfit)}\n` +
-      `🧾 *Savdolar soni:* ${orders.length} ta\n\n` +
-      `💡 _Tezkor chiqim kiritish uchun:_\n\`/chiqim <summa> <izoh>\``;
+      `📦 *Sotilgan tovar tannarxi:* ${formatMoney(totalCost)}\n`;
+
+    if (authUser.role !== "CASHIER") {
+      msg +=
+        `📉 *Bugungi chiqimlar:* ${formatMoney(totalExpenses)}\n` +
+        `------------------------------------\n` +
+        `💎 *SOF FOYDA:* ${formatMoney(netProfit)}\n`;
+    }
+
+    msg +=
+      `🧾 *Savdolar soni:* ${orders.length} ta\n` +
+      `👤 *Foydalanuvchi:* ${authUser.fullName} (${authUser.role})\n`;
+
+    if (authUser.role !== "CASHIER") {
+      msg += `\n💡 _Tezkor chiqim kiritish uchun:_\n\`/chiqim <summa> <izoh>\``;
+    }
 
     await ctx.reply(msg, { parse_mode: "Markdown" });
   } catch (e) {
@@ -152,6 +213,12 @@ bot.hears(["📊 Bugungi Hisobot", "🔄 Yangilash"], async (ctx) => {
 
 // Kam qolgan tovarlar
 bot.hears("⚠️ Kam qolgan tovarlar", async (ctx) => {
+  const userId = ctx.from?.id.toString();
+  if (!getAuthUser(userId)) {
+    await ctx.reply("⚠️ Avval tizimga kiring: /start");
+    return;
+  }
+
   try {
     const products = await prisma.product.findMany({
       where: { isActive: true },
@@ -166,11 +233,15 @@ bot.hears("⚠️ Kam qolgan tovarlar", async (ctx) => {
     }
 
     let msg = `⚠️ *OMBORDAGI KAM QOLGAN TOVARLAR (${lowStock.length} ta):*\n\n`;
-    lowStock.forEach((p, idx) => {
+    lowStock.slice(0, 15).forEach((p, idx) => {
       msg += `${idx + 1}. *${p.name}*\n`;
       msg += `   Qoldiq: *${p.stockQuantity} ${p.unit}* (Min chegara: ${p.minStockAlert})\n`;
       msg += `   Sotuv narxi: ${formatMoney(p.salePrice)}\n\n`;
     });
+
+    if (lowStock.length > 15) {
+      msg += `...va yana ${lowStock.length - 15} ta tovar kam qolgan.`;
+    }
 
     await ctx.reply(msg, { parse_mode: "Markdown" });
   } catch (e) {
@@ -179,8 +250,21 @@ bot.hears("⚠️ Kam qolgan tovarlar", async (ctx) => {
   }
 });
 
-// Do'konlar qarzlari
+// Do'konlar qarzlari (Faqat ADMIN va MANAGER)
 bot.hears("📑 Do'konlar Qarzi", async (ctx) => {
+  const userId = ctx.from?.id.toString();
+  const authUser = getAuthUser(userId);
+
+  if (!authUser) {
+    await ctx.reply("⚠️ Avval tizimga kiring: /start");
+    return;
+  }
+
+  if (authUser.role === "CASHIER") {
+    await ctx.reply("🚫 Ushbu bo'lim faqat Admin va Menejerlar uchun ochiq.");
+    return;
+  }
+
   try {
     const partners = await prisma.partner.findMany({
       where: { totalDebt: { gt: 0 } },
@@ -188,13 +272,13 @@ bot.hears("📑 Do'konlar Qarzi", async (ctx) => {
     });
 
     if (partners.length === 0) {
-      await ctx.reply("🎉 Ajoyib! Hozirda hech qaysi do'konning qarzi yo'q.");
+      await ctx.reply("🎉 Ajoyib! Hozirda hech qaysi do'kon yoki mijozning qarzi yo'q.");
       return;
     }
 
     const totalDebt = partners.reduce((sum, p) => sum + p.totalDebt, 0);
     let msg = `📑 *DO'KONLARNING NASIYA QARZLARI:*\n`;
-    msg += `Jami qarz summasi: *${formatMoney(totalDebt)}*\n\n`;
+    msg += `Jami nasiya summasi: *${formatMoney(totalDebt)}*\n\n`;
 
     partners.forEach((p, idx) => {
       msg += `${idx + 1}. *${p.name}*\n`;
@@ -212,17 +296,30 @@ bot.hears("📑 Do'konlar Qarzi", async (ctx) => {
 
 // Ombor holati
 bot.hears("📦 Ombor Holati", async (ctx) => {
+  const userId = ctx.from?.id.toString();
+  const authUser = getAuthUser(userId);
+
+  if (!authUser) {
+    await ctx.reply("⚠️ Avval tizimga kiring: /start");
+    return;
+  }
+
   try {
     const products = await prisma.product.findMany({ where: { isActive: true } });
     const totalCost = products.reduce((sum, p) => sum + p.stockQuantity * p.costPrice, 0);
     const totalSale = products.reduce((sum, p) => sum + p.stockQuantity * p.salePrice, 0);
 
-    const msg =
-      `📦 *OMBOR UMUMIY QIYMATI:*\n\n` +
-      `🔹 Jami tovar turlari: *${products.length} xil*\n` +
-      `🔹 Ombor tannarx qiymati: *${formatMoney(totalCost)}*\n` +
-      `🔹 Sotuvdagi umumiy qiymati: *${formatMoney(totalSale)}*\n` +
-      `🔹 Kutilayotgan umumiy foyda: *${formatMoney(totalSale - totalCost)}*`;
+    let msg = `📦 *OMBOR UMUMIY QIYMATI:*\n\n`;
+    msg += `🔹 Jami tovar turlari: *${products.length} xil*\n`;
+
+    if (authUser.role !== "CASHIER") {
+      msg +=
+        `🔹 Ombor tannarx qiymati: *${formatMoney(totalCost)}*\n` +
+        `🔹 Sotuvdagi umumiy qiymati: *${formatMoney(totalSale)}*\n` +
+        `🔹 Kutilayotgan umumiy foyda: *${formatMoney(totalSale - totalCost)}*`;
+    } else {
+      msg += `🔹 Sotuvdagi umumiy qiymati: *${formatMoney(totalSale)}*`;
+    }
 
     await ctx.reply(msg, { parse_mode: "Markdown" });
   } catch (e) {
@@ -232,6 +329,19 @@ bot.hears("📦 Ombor Holati", async (ctx) => {
 
 // Tezkor chiqim kiritish: /chiqim <summa> <izoh>
 bot.command("chiqim", async (ctx) => {
+  const userId = ctx.from?.id.toString();
+  const authUser = getAuthUser(userId);
+
+  if (!authUser) {
+    await ctx.reply("⚠️ Avval tizimga kiring: /start");
+    return;
+  }
+
+  if (authUser.role === "CASHIER") {
+    await ctx.reply("🚫 Chiqim kiritish huquqi faqat Admin va Menejerlarga berilgan.");
+    return;
+  }
+
   try {
     const text = ctx.match;
     if (!text) {
@@ -244,7 +354,7 @@ bot.command("chiqim", async (ctx) => {
 
     const parts = text.trim().split(" ");
     const amount = Number(parts[0]);
-    const note = parts.slice(1).join(" ") || "Bot orqali kiritilgan xarajat";
+    const note = parts.slice(1).join(" ") || `Bot orqali kiritildi (${authUser.fullName})`;
 
     if (!amount || isNaN(amount) || amount <= 0) {
       await ctx.reply("❌ Xatolik: Summa to'g'ri raqam bo'lishi kerak.");
@@ -266,13 +376,13 @@ bot.command("chiqim", async (ctx) => {
         categoryId: defaultCat.id,
         amount,
         paymentMethod: "CASH",
-        note,
+        note: `${note} [Kiritdi: ${authUser.fullName}]`,
         date: new Date(),
       },
     });
 
     await ctx.reply(
-      `✅ Chiqim tizimga saqlandi!\n💰 Summa: *${formatMoney(amount)}*\n📝 Izoh: ${note}`,
+      `✅ Chiqim tizimga saqlandi!\n💰 Summa: *${formatMoney(amount)}*\n📝 Izoh: ${note}\n👤 Mas'ul: ${authUser.fullName}`,
       { parse_mode: "Markdown" }
     );
   } catch (e) {
@@ -281,49 +391,133 @@ bot.command("chiqim", async (ctx) => {
   }
 });
 
-// Mijozlar katalogi
-bot.hears("📦 Mahsulotlar Katalogi", async (ctx) => {
-  try {
-    const products = await prisma.product.findMany({
-      where: { isActive: true },
-      take: 10,
-    });
+// Matnli xabarlar bilan ishlash (Login va Parol kiritish jarayoni)
+bot.on("message:text", async (ctx) => {
+  const userId = ctx.from?.id.toString();
+  const text = ctx.message.text.trim();
+  const userSession = sessions[userId] || {};
 
-    let msg = `🏗 *ENG MASHHUR QURILISH MOLLARI:*\n\n`;
-    products.forEach((p, idx) => {
-      const isOut = p.stockQuantity <= 0;
-      msg += `${idx + 1}. *${p.name}*\n`;
-      msg += `   Narxi: *${formatMoney(p.salePrice)}* (1 ${p.unit})\n`;
-      msg += `   Holat: ${isOut ? "❌ Sotuvda qolmagan" : `✅ Omborda mavjud (${p.stockQuantity} ${p.unit})`}\n\n`;
-    });
+  // 1. Agar foydalanuvchi logini kutilayotgan bo'lsa
+  if (userSession.step === "WAITING_FOR_USERNAME") {
+    try {
+      const dbUser = await prisma.user.findUnique({
+        where: { username: text },
+      });
 
-    msg += `Barcha tovarlarni ko'rish va buyurtma berish uchun "🛒 Onlayn Do'kon" tugmasini bosing!`;
-    await ctx.reply(msg, { parse_mode: "Markdown" });
-  } catch (e) {
-    console.error(e);
+      if (!dbUser) {
+        await ctx.reply(
+          `❌ "*${text}*" nomli foydalanuvchi topilmadi!\n\n` +
+          `Iltimos, admin tomonidan tizimda ochib berilgan to'g'ri loginingizni (Username) kiriting:`,
+          { parse_mode: "Markdown" }
+        );
+        return;
+      }
+
+      if (!dbUser.isActive) {
+        delete sessions[userId];
+        saveSessions();
+        await ctx.reply(
+          `🚫 Ushbu hisob (*${dbUser.username}*) ma'muriyat tomonidan vaqtincha nofaol qilingan.\n` +
+          `Iltimos, bosh admin bilan bog'laning.`,
+          { parse_mode: "Markdown", reply_markup: getLoginKeyboard() }
+        );
+        return;
+      }
+
+      // Foydalanuvchi topildi, endi parolni so'raymiz
+      sessions[userId] = {
+        step: "WAITING_FOR_PASSWORD",
+        tempUserId: dbUser.id,
+        tempUsername: dbUser.username,
+        tempFullName: dbUser.fullName,
+        tempRole: dbUser.role,
+      };
+      saveSessions();
+
+      await ctx.reply(
+        `👤 Foydalanuvchi: *${dbUser.fullName}* (${dbUser.role})\n\n` +
+        `🔑 *2-qadam:* Iltimos, hisobingiz *parolini (kodini)* kiriting:`,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    } catch (e) {
+      console.error(e);
+      await ctx.reply("Bazadan tekshirishda xatolik yuz berdi.");
+      return;
+    }
   }
-});
 
-// Onlayn do'kon havola
-bot.hears("🛒 Onlayn Do'kon", async (ctx) => {
-  const shopUrl = process.env.APP_URL || "http://localhost:3000/shop";
-  const keyboard = new InlineKeyboard().url("🛍 Onlayn Do'konni Ochish", shopUrl);
+  // 2. Agar foydalanuvchi paroli kutilayotgan bo'lsa
+  if (userSession.step === "WAITING_FOR_PASSWORD") {
+    try {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: userSession.tempUserId },
+      });
 
-  await ctx.reply(
-    `Bizning onlayn do'konimiz orqali real vaqtdagi ombor qoldiqlarini ko'rib, buyurtma berishingiz mumkin:`,
-    { reply_markup: keyboard }
-  );
-});
+      if (!dbUser) {
+        sessions[userId] = { step: "WAITING_FOR_USERNAME" };
+        saveSessions();
+        await ctx.reply("Foydalanuvchi topilmadi. Qaytadan login kiriting:");
+        return;
+      }
 
-// Aloqa
-bot.hears("📞 Aloqa va Manzil", async (ctx) => {
-  await ctx.reply(
-    `📍 *Manzil:* Toshkent shahar, Qurilish bozori\n` +
-      `📞 *Telefon:* +998 90 123 45 67\n` +
-      `⏰ *Ish vaqti:* Dushanba - Yakshanba: 08:00 - 19:00\n\n` +
-      `Savollaringiz bo'lsa, bemalol murojaat qilishingiz mumkin!`,
-    { parse_mode: "Markdown" }
-  );
+      const isPasswordValid = bcrypt.compareSync(text, dbUser.passwordHash);
+
+      if (!isPasswordValid) {
+        await ctx.reply(
+          `❌ *Parol noto'g'ri kiritildi!*\n\n` +
+          `Iltimos, *${dbUser.fullName}* hisobining parolini qaytadan kiriting:\n_(Agar boshqa hisob bilan kirmoqchi bo'lsangiz, /start buyrug'ini bosing)_`,
+          { parse_mode: "Markdown" }
+        );
+        return;
+      }
+
+      // Parol to'g'ri! Sessiyani saqlaymiz
+      sessions[userId] = {
+        step: "AUTHENTICATED",
+        user: {
+          id: dbUser.id,
+          username: dbUser.username,
+          fullName: dbUser.fullName,
+          role: dbUser.role,
+        },
+      };
+      saveSessions();
+
+      // Agar ADMIN bo'lsa, xabarnomalar uchun adminId ga biriktiramiz
+      if (dbUser.role === "ADMIN") {
+        adminId = userId;
+        try {
+          fs.writeFileSync(adminFilePath, userId);
+        } catch (e) {}
+      }
+
+      const kb = dbUser.role === "CASHIER" ? getCashierKeyboard() : getAdminKeyboard();
+
+      await ctx.reply(
+        `🎉 *Muvaffaqiyatli kirdingiz!*\n\n` +
+        `👤 *Ism:* ${dbUser.fullName}\n` +
+        `🎯 *Rol:* ${dbUser.role}\n` +
+        `📱 *Telegram ID:* \`${userId}\`\n\n` +
+        `Endi quyidagi menyu orqali do'kon ma'lumotlarini boshqarishingiz mumkin:`,
+        { parse_mode: "Markdown", reply_markup: kb }
+      );
+      return;
+    } catch (e) {
+      console.error(e);
+      await ctx.reply("Parolni tekshirishda xatolik yuz berdi.");
+      return;
+    }
+  }
+
+  // 3. Agar tizimga kirmagan bo'lsa va boshqa narsa yozsa
+  const authUser = getAuthUser(userId);
+  if (!authUser) {
+    await ctx.reply(
+      `⚠️ Siz hali botga kirmagansiz.\nIltimos, "🔐 Tizimga Kirish" tugmasini bosing yoki /start yozing:`,
+      { reply_markup: getLoginKeyboard() }
+    );
+  }
 });
 
 bot.catch((err) => {
