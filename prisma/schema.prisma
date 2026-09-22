@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  icon        String?
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+}
+
+model Product {
+  id              String          @id @default(cuid())
+  categoryId      String
+  category        Category        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name            String
+  code            String?         @unique // SKU
+  barcode         String?         @unique
+  unit            String          @default("dona") // dona, kg, m2, metr, qop, tonna, litr
+  costPrice       Float           @default(0) // Tannarxi (UZS)
+  salePrice       Float           @default(0) // Sotuv narxi (UZS)
+  stockQuantity   Float           @default(0) // Ombordagi qoldiq
+  minStockAlert   Float           @default(10) // Minimal zaxira chegarasi
+  imageUrl        String?
+  description     String?
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  stockMovements  StockMovement[]
+  orderItems      OrderItem[]
+}
+
+model StockMovement {
+  id            String    @id @default(cuid())
+  productId     String
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type          String    // IN (Kirim), OUT (Chiqim/Sotuv), ADJUSTMENT (Qayta sanash), RETURN (Qaytarish)
+  quantity      Float
+  costPrice     Float     @default(0)
+  salePrice     Float     @default(0)
+  referenceType String?   // "purchase", "sale", "manual", "return"
+  referenceId   String?
+  note          String?
+  createdBy     String?
+  createdAt     DateTime  @default(now())
+}
+
+model Partner {
+  id            String        @id @default(cuid())
+  name          String        // Do'kon nomi yoki mijoz F.I.Sh
+  type          String        @default("STORE_CLIENT") // STORE_CLIENT (Do'kon), RETAIL_CLIENT (Jismoniy xaridor), SUPPLIER (Yetkazib beruvchi)
+  phone         String?
+  address       String?
+  contactPerson String?
+  totalDebt     Float         @default(0) // Hozirgi qarz qoldig'i (UZS)
+  note          String?
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  orders        Order[]
+  debtPayments  DebtPayment[]
+  expenses      Expense[]
+}
+
+model Order {
+  id              String        @id @default(cuid())
+  orderNumber     String        @unique // Masalan: ORD-20260921-001
+  partnerId       String?
+  partner         Partner?      @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  source          String        @default("POS") // POS (Kassa), ONLINE (Do'kon sayti), TELEGRAM
+  status          String        @default("COMPLETED") // COMPLETED, PENDING, CANCELLED
+  totalAmount     Float         @default(0) // Jami savdo summasi
+  totalCost       Float         @default(0) // Jami tannarx
+  paidAmount      Float         @default(0) // To'langan summa
+  debtAmount      Float         @default(0) // Nasiya (qarz) summasi
+  paymentStatus   String        @default("PAID") // PAID, PARTIAL, DEBT
+  paymentMethod   String        @default("CASH") // CASH, CARD, TRANSFER, DEBT, MIXED
+  customerName    String?
+  customerPhone   String?
+  deliveryAddress String?
+  dueDate         DateTime?     // Nasiyani qaytarish muddati
+  note            String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  items           OrderItem[]
+  debtPayments    DebtPayment[]
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  productName String
+  unit        String   @default("dona")
+  quantity    Float
+  costPrice   Float    @default(0)
+  unitPrice   Float    @default(0)
+  totalPrice  Float    @default(0)
+}
+
+model DebtPayment {
+  id            String    @id @default(cuid())
+  partnerId     String
+  partner       Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  orderId       String?
+  order         Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  amount        Float     // To'langan summa
+  paymentMethod String    @default("CASH") // CASH, CARD, TRANSFER
+  note          String?
+  createdAt     DateTime  @default(now())
+}
+
+model ExpenseCategory {
+  id        String    @id @default(cuid())
+  name      String    @unique // Ijara, Ish haqi, Transport, Tovar xaridi, Soliq, Kommunal, Boshqa
+  createdAt DateTime  @default(now())
+  expenses  Expense[]
+}
+
+model Expense {
+  id            String          @id @default(cuid())
+  categoryId    String
+  category      ExpenseCategory @relation(fields: [categoryId], references: [id])
+  partnerId     String?
+  partner       Partner?        @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  amount        Float           // Chiqim summasi (UZS)
+  paymentMethod String          @default("CASH") // CASH, CARD, TRANSFER
+  note          String?
+  date          DateTime        @default(now())
+  createdAt     DateTime        @default(now())
+}
+
+model User {
+  id           String    @id @default(cuid())
+  username     String    @unique
+  passwordHash String
+  fullName     String
+  role         String    @default("CASHIER") // ADMIN, MANAGER, CASHIER
+  phone        String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// Onlayn do'kon va tizim orqali kelib tushgan arizalar (Ulgurji narx, Obyekt smetasi, Hamkorlik)
+model Application {
+  id             String   @id @default(cuid())
+  fullName       String   // F.I.Sh yoki Tashkilot vakili
+  phone          String   // Telefon raqami
+  organization   String?  // Tashkilot yoki Obyekt nomi
+  address        String?  // Manzili
+  requestedItems String?  // Qiziqtirgan tovarlar yoki smeta
+  note           String?  // Qo'shimcha izoh
+  status         String   @default("YANGI") // YANGI, ALOQADA, YAKUNLANDI, BEKOR_QILINDI
+  adminNote      String?  // Admin izohi
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
