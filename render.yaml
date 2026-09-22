@@ -6,7 +6,7 @@ services:
     plan: free
     region: frankfurt # Yevropa/O'zbekistonga eng yaqin
     buildCommand: npm install && npx prisma generate && npx prisma db push && node prisma/seed.js && npm run build
-    startCommand: npm start
+    startCommand: npm run start:all
     envVars:
       - key: DATABASE_URL
         fromDatabase:

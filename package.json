@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
+    "start:all": "node scripts/start-all.js",
+    "keep-alive": "node scripts/keep-alive.js",
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",

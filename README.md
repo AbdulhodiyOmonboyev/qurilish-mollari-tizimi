@@ -64,6 +64,18 @@ Yakka tartibdagi tadbirkorlar va qurilish mollari savdosi bilan shug'ullanuvchi 
 - `/chiqim <summa> <izoh>` orqali botdan turib xarajat kiritish.
 - Yangi ariza kelib tushganda darhol botga xabar yuborish.
 
+### 10. 🛡️ Anti-Sleep (Doimiy Uyg'oq Tutish) Tizimi
+Render va shunga o'xshash bulutli hostinglarda bepul tarifda veb-ilovalar 15 daqiqa harakatsizlikdan so'ng avtomatik "uyqu" (spin-down/sleep) rejimiga o'tib qoladi. Ushbu loyihada tizim hech qachon uxlab qolmasligi uchun **3 bosqichli Anti-Sleep himoyasi** o'rnatildi:
+1. **Ichki Keep-Alive Pinger (`scripts/keep-alive.js`):**
+   - Tizim ishga tushganda orqa fonda ishlaydi va har 10 daqiqada o'zining `/api/health` manziliga so'rov yuborib turadi.
+   - Render'ning tashqi domeni orqali o'tishi sababli Render inaktivlik hisoblagichini doimiy ravishda 0 ga tushirib turadi.
+2. **GitHub Actions Avtomatik Tekshiruvchi (`.github/workflows/keep-alive.yml`):**
+   - GitHub serverlaridan har 14 daqiqada avtomatik so'rov jo'natiladi.
+   - Hatto Render tasodifan qayta yuklansa ham, GitHub tashqaridan ping berib uni darhol uyg'oq ushlab turadi.
+3. **Sog'liqni Tekshirish API (`/api/health`):**
+   - Tizim ish faoliyati, xotira, uptime va PostgreSQL ulanishini JSON holatida tezkor qaytaradi.
+   - Bepul tashqi monitoring xizmatlari (masalan, [cron-job.org](https://cron-job.org) yoki [uptimerobot.com](https://uptimerobot.com)) orqali ushbu havolani qo'shib qo'yish mumkin: `https://<sizning-ilovangiz>.onrender.com/api/health`.
+
 ---
 
 ## 🚀 Tizimga Kirish Havolalari
@@ -81,6 +93,7 @@ Hozirda barcha xizmatlar fon rejimida faol ishlab turibdi:
 | **Xodimlar Boshqaruvi** | [http://localhost:3000/users](http://localhost:3000/users) | Faqat Admin |
 | **Arizalar & So'rovlar** | [http://localhost:3000/applications](http://localhost:3000/applications) | Login talab qilinadi |
 | **Mijozlar Onlayn Do'koni** | [http://localhost:3000/shop](http://localhost:3000/shop) | Barcha uchun ochiq |
+| **Sog'liq / Anti-Sleep API** | [http://localhost:3000/api/health](http://localhost:3000/api/health) | Ochiq |
 | **Telegram Bot** | [@for_my_dad1_bot](https://t.me/for_my_dad1_bot) | Telegram orqali |
 
 ---
