@@ -4,6 +4,8 @@ Yakka tartibdagi tadbirkorlar va qurilish mollari savdosi bilan shug'ullanuvchi 
 
 **Asosiy Texnologiyalar:** Next.js 14 (App Router, Tailwind CSS), **PostgreSQL 18** (Prisma ORM), Jose / BcryptJS (JWT autentifikatsiya), GrammY (Telegram Bot), SheetJS (Excel) va jsPDF.
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/AbdulhodiyOmonboyev/qurilish-mollari-tizimi)
+
 ---
 
 ## 🌟 Tizim Imkoniyatlari va Yangi Modullar
