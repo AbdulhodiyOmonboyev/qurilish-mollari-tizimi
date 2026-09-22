@@ -53,13 +53,14 @@ async function processWithGemini(audioBuffer, mimeType, apiKey) {
     "Ushbu o'zbek tilidagi audio ovozli xabarni tinglang va undan chiqim (xarajat) ma'lumotlarini aniqlang.\n" +
     "Talablar:\n" +
     "1. 'transcript': Audioda aytilgan aniq o'zbekcha gap.\n" +
-    "2. 'amount': Xarajat summasi (faqat raqam, masalan: 150000, 200000, 1000000). Ming va million so'zlarini to'liq son ko'rinishida yozing.\n" +
+    "2. 'amount': Xarajat summasi (faqat butun son raqamda, masalan: 150000, 200000, 1000000). Ming va million so'zlarini to'liq son ko'rinishida yozing.\n" +
     "3. 'note': Xarajat nimaga qilingani haqida qisqa tushunarli izoh.\n" +
     "4. 'category': Quyidagi ro'yxatdan bittasini tanlang: 'Tovar xaridi', 'Do'kon/Ombor ijarasi', 'Ish haqi (Oylik)', 'Transport va logistika', 'Kommunal to'lovlar', 'Oziq-ovqat va tushlik', 'Boshqa xarajatlar'.\n\n" +
     "Javobni FAQAT JSON formatida qaytaring, boshqa hech qanday so'z qo'shmang:\n" +
     "{\n  \"transcript\": \"...\",\n  \"amount\": 150000,\n  \"note\": \"...\",\n  \"category\": \"...\"\n}";
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const model = "gemini-2.5-flash";
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const requestBody = {
     contents: [
@@ -83,7 +84,10 @@ async function processWithGemini(audioBuffer, mimeType, apiKey) {
 
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
     body: JSON.stringify(requestBody),
   });
 
@@ -104,7 +108,7 @@ async function processWithGemini(audioBuffer, mimeType, apiKey) {
     amount: Number(parsed.amount) || extractAmountFromText(parsed.transcript) || 0,
     note: parsed.note || parsed.transcript,
     category: parsed.category || detectCategory(parsed.transcript),
-    engine: "Google Gemini 1.5 Flash",
+    engine: "Google Gemini 2.5 Flash",
   };
 }
 
