@@ -17,6 +17,9 @@ import {
   ArrowRight,
   Receipt,
   X,
+  Store,
+  MapPin,
+  Package,
 } from "lucide-react";
 
 export default function PosPage() {
@@ -57,6 +60,12 @@ export default function PosPage() {
 
   useEffect(() => {
     loadData();
+    // Check if partnerId was passed in URL query param
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const pid = params.get("partnerId");
+      if (pid) setSelectedPartnerId(pid);
+    }
   }, []);
 
   // Filter products by search
@@ -68,6 +77,9 @@ export default function PosPage() {
       (p.barcode && p.barcode.includes(q))
     );
   });
+
+  // Selected partner object
+  const selectedPartner = partners.find((p) => p.id === selectedPartnerId);
 
   // Add to cart
   function addToCart(product: any) {
@@ -135,55 +147,50 @@ export default function PosPage() {
     setCart((prev) => prev.filter((item) => item.productId !== productId));
   }
 
+  // Calculate totals
   const totalAmount = cart.reduce(
     (sum, item) => sum + item.quantity * item.unitPrice,
     0
   );
 
-  // Sync paid amount with payment mode
+  // Update paid amount when total or mode changes
   useEffect(() => {
     if (paymentMode === "FULL") {
       setPaidAmount(totalAmount);
     } else if (paymentMode === "DEBT") {
       setPaidAmount(0);
     }
-  }, [paymentMode, totalAmount]);
+  }, [totalAmount, paymentMode]);
 
   const debtAmount = Math.max(0, totalAmount - paidAmount);
 
+  // Submit checkout
   async function handleCheckout() {
     if (cart.length === 0) {
-      alert("Savatcha bo'sh!");
+      alert("Savat bo'sh! Tovar tanlang.");
       return;
     }
 
-    if (debtAmount > 0 && !selectedPartnerId) {
-      alert("Nasiyaga savdo qilish uchun do'kon / mijozni tanlashingiz shart!");
+    if (debtAmount > 0 && !selectedPartnerId && !customerName) {
+      alert("Nasiyaga savdo qilish uchun mijoz yoki hamkor do'kon tanlanishi shart!");
       return;
     }
 
     try {
       const payload = {
-        items: cart.map((c) => ({
-          productId: c.productId,
-          quantity: c.quantity,
-          unitPrice: c.unitPrice,
+        items: cart.map((i) => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
         })),
         partnerId: selectedPartnerId || null,
-        customerName:
-          customerName ||
-          (selectedPartnerId
-            ? partners.find((p) => p.id === selectedPartnerId)?.name
-            : "Chakana xaridor"),
+        customerName: customerName || (selectedPartner ? selectedPartner.name : null),
+        customerPhone: selectedPartner?.phone || null,
+        deliveryAddress: selectedPartner?.address || null,
         paidAmount,
-        paymentMethod:
-          debtAmount > 0
-            ? paidAmount > 0
-              ? "MIXED"
-              : "DEBT"
-            : paymentMethod,
-        dueDate: dueDate || null,
-        note,
+        paymentMethod: debtAmount > 0 && paidAmount === 0 ? "DEBT" : paymentMethod,
+        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+        note: note || (selectedPartner ? `Do'konga berilgan tovar: ${selectedPartner.name}` : null),
         source: "POS",
       };
 
@@ -220,7 +227,7 @@ export default function PosPage() {
     <div>
       <Header
         title="Kassa / Tezkor Savdo (POS)"
-        subtitle="Mahsulotlarni tanlash, naqd/karta/nasiya savdosi va chek chiqarish"
+        subtitle="HARD_WALL.UZ tovar savdosi, do'konlarga yuk berish, naqd/nasiya va chek chiqarish"
       />
 
       <main className="p-6 max-w-7xl mx-auto w-full">
@@ -241,7 +248,7 @@ export default function PosPage() {
               {search && (
                 <button
                   onClick={() => setSearch("")}
-                  className="text-slate-400 hover:text-slate-600 text-xs"
+                  className="text-slate-400 hover:text-slate-600 text-xs font-semibold"
                 >
                   Tozalash
                 </button>
@@ -260,11 +267,11 @@ export default function PosPage() {
                     className={`p-3.5 rounded-2xl border text-left transition flex flex-col justify-between h-32 relative overflow-hidden ${
                       isOutOfStock
                         ? "bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed"
-                        : "bg-white border-slate-200 hover:border-emerald-500 hover:shadow-md active:scale-95"
+                        : "bg-white border-slate-200 hover:border-orange-500 hover:shadow-md active:scale-95"
                     }`}
                   >
                     <div>
-                      <p className="text-[10px] text-slate-400 uppercase font-semibold truncate">
+                      <p className="text-[10px] text-orange-600 uppercase font-bold truncate">
                         {p.category?.name}
                       </p>
                       <h4 className="font-bold text-xs text-slate-900 line-clamp-2 mt-0.5 leading-snug">
@@ -273,15 +280,13 @@ export default function PosPage() {
                     </div>
 
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between w-full">
-                      <span className="font-black text-xs text-emerald-700">
+                      <span className="font-black text-xs text-orange-600">
                         {formatMoney(p.salePrice)}
                       </span>
                       <span
                         className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                          isOutOfStock
+                          p.stockQuantity <= p.minStockAlert
                             ? "bg-rose-100 text-rose-700"
-                            : p.stockQuantity <= p.minStockAlert
-                            ? "bg-amber-100 text-amber-800"
                             : "bg-slate-100 text-slate-600"
                         }`}
                       >
@@ -291,20 +296,26 @@ export default function PosPage() {
                   </button>
                 );
               })}
+
+              {filteredProducts.length === 0 && (
+                <div className="col-span-full py-16 text-center text-slate-400 text-xs">
+                  Tovarlar topilmadi
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Right: Cart, Customer & Checkout (5 cols) */}
-          <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 shadow-sm p-5 space-y-4 sticky top-24">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          {/* Right: Cart & Checkout (5 cols) */}
+          <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 shadow-sm p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-emerald-600" />
-                <h3 className="font-bold text-sm text-slate-900">Savat ({cart.length})</h3>
+                <ShoppingCart className="w-5 h-5 text-orange-600" />
+                <h3 className="font-black text-sm text-slate-900">Savat ({cart.length})</h3>
               </div>
               {cart.length > 0 && (
                 <button
                   onClick={() => setCart([])}
-                  className="text-xs text-rose-500 hover:text-rose-700 font-medium"
+                  className="text-xs text-rose-500 hover:text-rose-700 font-bold"
                 >
                   Tozalash
                 </button>
@@ -312,50 +323,49 @@ export default function PosPage() {
             </div>
 
             {/* Cart Items List */}
-            <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+            <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
               {cart.map((item) => (
                 <div
                   key={item.productId}
-                  className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-3 text-xs"
+                  className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between gap-3 text-xs"
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-900 truncate">{item.name}</p>
+                  <div className="min-w-0 flex-1">
+                    <h5 className="font-bold text-slate-900 truncate">{item.name}</h5>
                     <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[11px] text-slate-400">Narx:</span>
                       <input
                         type="number"
                         value={item.unitPrice}
                         onChange={(e) => updatePrice(item.productId, Number(e.target.value))}
-                        className="w-20 px-1.5 py-0.5 border rounded bg-white text-[11px] font-semibold text-slate-800"
-                        title="Dona narxini o'zgartirish"
+                        className="w-20 px-1.5 py-0.5 bg-white border border-slate-200 rounded font-bold text-slate-800"
                       />
-                      <span className="text-[11px] text-slate-400">/{item.unit}</span>
                     </div>
                   </div>
 
-                  {/* Quantity Controls */}
-                  <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1">
+                  {/* Quantity controls */}
+                  <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-0.5">
                     <button
                       onClick={() => updateQuantity(item.productId, item.quantity - 1)}
-                      className="p-1 hover:bg-slate-100 rounded text-slate-600"
+                      className="p-1 rounded-lg hover:bg-slate-100 text-slate-600"
                     >
-                      <Minus className="w-3.5 h-3.5" />
+                      <Minus className="w-3 h-3" />
                     </button>
-                    <span className="font-black text-xs px-1.5 min-w-[20px] text-center">
+                    <span className="w-8 text-center font-black text-slate-900">
                       {item.quantity}
                     </span>
                     <button
                       onClick={() => updateQuantity(item.productId, item.quantity + 1)}
-                      className="p-1 hover:bg-slate-100 rounded text-slate-600"
+                      className="p-1 rounded-lg hover:bg-slate-100 text-slate-600"
                     >
-                      <Plus className="w-3.5 h-3.5" />
+                      <Plus className="w-3 h-3" />
                     </button>
                   </div>
 
-                  {/* Item Total */}
-                  <div className="text-right min-w-[70px]">
-                    <p className="font-bold text-slate-900">
+                  {/* Item total */}
+                  <div className="text-right shrink-0">
+                    <span className="font-black text-slate-900 block">
                       {formatMoney(item.quantity * item.unitPrice)}
-                    </p>
+                    </span>
                     <button
                       onClick={() => removeFromCart(item.productId)}
                       className="text-slate-400 hover:text-rose-600 mt-1"
@@ -368,7 +378,7 @@ export default function PosPage() {
 
               {cart.length === 0 && (
                 <div className="py-8 text-center text-slate-400 text-xs">
-                  Savat bo'sh. Chap tarafdan mahsulotlarni tanlang.
+                  Savat bo'sh. Chap tarafdan tovarlarni tanlang.
                 </div>
               )}
             </div>
@@ -376,22 +386,41 @@ export default function PosPage() {
             {/* Customer & Partner Selector */}
             <div className="pt-3 border-t border-slate-100 space-y-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">
+                <label className="font-bold text-slate-700 block mb-1">
                   Mijoz / Hamkor Do'kon:
                 </label>
                 <select
                   value={selectedPartnerId}
                   onChange={(e) => setSelectedPartnerId(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-xl bg-slate-50 focus:bg-white focus:outline-none"
+                  className="w-full px-3 py-2 border rounded-xl bg-slate-50 focus:bg-white focus:outline-none font-semibold text-slate-800"
                 >
                   <option value="">Oddiy xaridor (Do'kon emas)</option>
                   {partners.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} (Qarzi: {formatMoney(p.totalDebt)})
+                      {p.name} {p.totalDebt > 0 ? `(Qarzi: ${formatMoney(p.totalDebt)})` : ""}
                     </option>
                   ))}
                 </select>
               </div>
+
+              {/* Show selected store address badge if store selected */}
+              {selectedPartner && (
+                <div className="p-3 rounded-2xl bg-orange-50 border border-orange-200 text-xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-orange-950 flex items-center gap-1.5">
+                      <Store className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                      {selectedPartner.name}
+                    </span>
+                    <span className="font-black text-rose-600">Qarz: {formatMoney(selectedPartner.totalDebt)}</span>
+                  </div>
+                  {selectedPartner.address && (
+                    <p className="text-[11px] text-slate-700 flex items-start gap-1 font-medium">
+                      <MapPin className="w-3 h-3 text-orange-600 shrink-0 mt-0.5" />
+                      <span>{selectedPartner.address}</span>
+                    </p>
+                  )}
+                </div>
+              )}
 
               {!selectedPartnerId && (
                 <div>
@@ -400,14 +429,14 @@ export default function PosPage() {
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     placeholder="Mijoz ismi (ixtiyoriy)..."
-                    className="w-full px-3 py-1.5 border rounded-xl bg-slate-50 text-xs"
+                    className="w-full px-3 py-2 border rounded-xl bg-slate-50 text-xs focus:bg-white"
                   />
                 </div>
               )}
 
               {/* Payment Mode Selector */}
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">
+                <label className="font-bold text-slate-700 block mb-1">
                   To'lov Holati:
                 </label>
                 <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-xl">
@@ -418,7 +447,7 @@ export default function PosPage() {
                       paymentMode === "FULL" ? "bg-white shadow text-emerald-700" : "text-slate-600"
                     }`}
                   >
-                    To'liq Naqd
+                    To'liq To'lov
                   </button>
                   <button
                     type="button"
@@ -445,17 +474,17 @@ export default function PosPage() {
               {paymentMode === "PARTIAL" && (
                 <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-600">To'lanayotgan summa:</span>
+                    <span className="text-slate-600 font-semibold">To'lanayotgan summa:</span>
                     <input
                       type="number"
                       value={paidAmount}
                       onChange={(e) => setPaidAmount(Number(e.target.value))}
-                      className="w-32 px-2 py-1 bg-white border border-amber-300 rounded-lg text-right font-bold"
+                      className="w-32 px-2 py-1 bg-white border border-amber-300 rounded-lg text-right font-black"
                     />
                   </div>
-                  <div className="flex items-center justify-between text-[11px] text-amber-900 font-semibold">
+                  <div className="flex items-center justify-between text-[11px] text-amber-900 font-bold">
                     <span>Nasiyaga qoladigan qarz:</span>
-                    <span className="text-rose-600 font-bold">{formatMoney(debtAmount)}</span>
+                    <span className="text-rose-600 font-black">{formatMoney(debtAmount)}</span>
                   </div>
                 </div>
               )}
@@ -463,7 +492,7 @@ export default function PosPage() {
               {/* Debt Due Date */}
               {debtAmount > 0 && (
                 <div>
-                  <label className="font-semibold text-rose-700 block mb-1">
+                  <label className="font-bold text-rose-700 block mb-1">
                     Nasiyani qaytarish sanasi (muddati):
                   </label>
                   <input
@@ -478,7 +507,7 @@ export default function PosPage() {
               {/* Payment Method selector (if paying money) */}
               {paidAmount > 0 && (
                 <div className="flex items-center gap-2">
-                  <label className="text-slate-500 text-[11px]">To'lov usuli:</label>
+                  <label className="text-slate-500 text-[11px] font-bold">To'lov usuli:</label>
                   <div className="flex gap-2">
                     {[
                       { id: "CASH", label: "Naqd" },
@@ -489,7 +518,7 @@ export default function PosPage() {
                         key={m.id}
                         type="button"
                         onClick={() => setPaymentMethod(m.id)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${
+                        className={`px-3 py-1 rounded-lg text-[11px] font-bold border ${
                           paymentMethod === m.id
                             ? "bg-slate-900 text-white border-slate-900"
                             : "bg-slate-50 text-slate-600 border-slate-200"
@@ -506,13 +535,13 @@ export default function PosPage() {
             {/* Total Calculation Display */}
             <div className="pt-3 border-t border-slate-100 space-y-1.5">
               <div className="flex items-center justify-between text-xs text-slate-500">
-                <span>Jami savdo summasi:</span>
-                <span className="font-bold text-slate-900 text-sm">
+                <span className="font-semibold">Jami savdo summasi:</span>
+                <span className="font-black text-slate-900 text-base">
                   {formatMoney(totalAmount)}
                 </span>
               </div>
               {debtAmount > 0 && (
-                <div className="flex items-center justify-between text-xs text-rose-600 font-semibold">
+                <div className="flex items-center justify-between text-xs text-rose-600 font-bold">
                   <span>Nasiya (Qarz):</span>
                   <span>{formatMoney(debtAmount)}</span>
                 </div>
@@ -523,7 +552,7 @@ export default function PosPage() {
             <button
               onClick={handleCheckout}
               disabled={cart.length === 0}
-              className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm shadow-lg shadow-orange-600/30 transition flex items-center justify-center gap-2"
             >
               <CheckCircle className="w-5 h-5" />
               Savdoni Rasmiylashtirish
@@ -538,8 +567,8 @@ export default function PosPage() {
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-emerald-600" />
-                <h3 className="font-bold text-sm text-slate-900">Savdo Cheki</h3>
+                <Receipt className="w-5 h-5 text-orange-600" />
+                <h3 className="font-black text-sm text-slate-900">Savdo Cheki (Yuk Xati)</h3>
               </div>
               <button
                 onClick={() => setIsReceiptOpen(false)}
@@ -552,14 +581,20 @@ export default function PosPage() {
             {/* Printable Receipt Container */}
             <div ref={receiptRef} className="my-4 p-4 border border-dashed border-slate-300 rounded-2xl text-xs space-y-3 bg-slate-50">
               <div className="text-center pb-2 border-b border-slate-200">
-                <h4 className="font-black text-sm uppercase text-slate-900">QURILISH MOLLARI DO'KONI</h4>
-                <p className="text-[11px] text-slate-500">Tel: +998 90 123 45 67</p>
+                <h4 className="font-black text-base uppercase text-slate-900">HARD_WALL.UZ</h4>
+                <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest">SERPYANKA ISHLAB CHIQARUVCHI</p>
+                <p className="text-[11px] text-slate-600 font-semibold mt-1">Tel: +998 90 769 35 39 • +998 99 769 35 39</p>
                 <p className="text-[10px] text-slate-400 mt-1">
                   Chek №: {completedOrder.orderNumber} | {new Date(completedOrder.createdAt).toLocaleString("uz-UZ")}
                 </p>
                 {completedOrder.customerName && (
-                  <p className="text-[11px] font-semibold text-slate-700 mt-1">
-                    Mijoz: {completedOrder.customerName}
+                  <p className="text-[11px] font-bold text-slate-800 mt-1">
+                    Mijoz/Do'kon: {completedOrder.customerName}
+                  </p>
+                )}
+                {completedOrder.deliveryAddress && (
+                  <p className="text-[10px] text-slate-500">
+                    Manzil: {completedOrder.deliveryAddress}
                   </p>
                 )}
               </div>
@@ -569,12 +604,12 @@ export default function PosPage() {
                 {completedOrder.items?.map((item: any, idx: number) => (
                   <div key={idx} className="flex justify-between items-start text-[11px]">
                     <div className="flex-1">
-                      <p className="font-semibold text-slate-800">{item.productName}</p>
+                      <p className="font-bold text-slate-800">{item.productName}</p>
                       <p className="text-slate-500">
                         {item.quantity} {item.unit} x {formatMoney(item.unitPrice)}
                       </p>
                     </div>
-                    <span className="font-bold text-slate-900">
+                    <span className="font-black text-slate-900">
                       {formatMoney(item.totalPrice)}
                     </span>
                   </div>
@@ -582,16 +617,16 @@ export default function PosPage() {
               </div>
 
               <div className="pt-2 border-t border-slate-200 space-y-1">
-                <div className="flex justify-between font-bold text-xs text-slate-900">
+                <div className="flex justify-between font-black text-xs text-slate-900">
                   <span>Jami Summa:</span>
                   <span>{formatMoney(completedOrder.totalAmount)}</span>
                 </div>
                 <div className="flex justify-between text-slate-600 text-[11px]">
                   <span>To'landi:</span>
-                  <span className="font-semibold text-emerald-700">{formatMoney(completedOrder.paidAmount)}</span>
+                  <span className="font-bold text-emerald-700">{formatMoney(completedOrder.paidAmount)}</span>
                 </div>
                 {completedOrder.debtAmount > 0 && (
-                  <div className="flex justify-between text-rose-600 font-bold text-[11px]">
+                  <div className="flex justify-between text-rose-600 font-black text-[11px]">
                     <span>Nasiyaga yozildi:</span>
                     <span>{formatMoney(completedOrder.debtAmount)}</span>
                   </div>
@@ -603,8 +638,8 @@ export default function PosPage() {
                 )}
               </div>
 
-              <div className="text-center pt-2 text-[10px] text-slate-400">
-                Xaridingiz uchun rahmat!
+              <div className="text-center pt-2 text-[10px] text-slate-400 font-semibold">
+                HARD_WALL.UZ — Ishonchli va mustahkam! Xaridingiz uchun rahmat.
               </div>
             </div>
 
@@ -612,14 +647,14 @@ export default function PosPage() {
             <div className="flex items-center gap-2 pt-2">
               <button
                 onClick={handlePrint}
-                className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-md shadow-orange-600/25"
               >
                 <Printer className="w-4 h-4" />
                 Chop etish
               </button>
               <button
                 onClick={() => setIsReceiptOpen(false)}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold text-xs"
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs"
               >
                 Yopish
               </button>

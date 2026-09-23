@@ -15,7 +15,9 @@ import {
   Users,
   Inbox,
   LogOut,
+  Settings,
 } from "lucide-react";
+import HardWallLogo from "@/components/HardWallLogo";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -68,7 +70,7 @@ export default function Sidebar() {
       icon: Boxes,
     },
     {
-      name: "Nasiya Daftari (Do'konlar)",
+      name: "Mahalliy Do'konlar & Nasiya",
       href: "/debts",
       icon: BookOpen,
     },
@@ -93,20 +95,19 @@ export default function Sidebar() {
       href: "/users",
       icon: Users,
     },
+    {
+      name: "Sozlamalar",
+      href: "/settings",
+      icon: Settings,
+    },
   ];
 
   return (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800 text-slate-300 flex flex-col shrink-0 min-h-screen">
+    <aside className="w-64 bg-[#0B0F19] border-r border-slate-800 text-slate-300 flex flex-col shrink-0 min-h-screen">
       {/* Brand Logo */}
-      <div className="p-5 border-b border-slate-800 flex items-center justify-between">
-        <Link href="/dashboard" className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center font-black text-white text-lg shadow-md shadow-emerald-600/30">
-            QM
-          </div>
-          <div>
-            <h2 className="font-bold text-sm text-white leading-tight">Qurilish Ombor</h2>
-            <p className="text-[11px] text-emerald-400 font-medium">Boshqaruv Tizimi</p>
-          </div>
+      <div className="p-4 border-b border-slate-800/80">
+        <Link href="/dashboard" className="block hover:opacity-95 transition">
+          <HardWallLogo variant="compact" />
         </Link>
       </div>
 
@@ -124,8 +125,8 @@ export default function Sidebar() {
               href={item.href}
               className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition duration-150 ${
                 isActive
-                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20 font-semibold"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800/80"
+                  ? "bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-md shadow-orange-600/25 font-bold"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
               }`}
             >
               <div className="flex items-center gap-3">
@@ -136,8 +137,8 @@ export default function Sidebar() {
                 <span
                   className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
                     isActive
-                      ? "bg-emerald-700 text-white"
-                      : "bg-emerald-950 text-emerald-400 border border-emerald-800/50"
+                      ? "bg-orange-700 text-white"
+                      : "bg-orange-950/80 text-orange-400 border border-orange-800/50"
                   }`}
                 >
                   {item.badge}
@@ -162,8 +163,8 @@ export default function Sidebar() {
             className="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/80 transition"
           >
             <div className="flex items-center gap-3">
-              <Store className="w-4 h-4 text-blue-400" />
-              <span>Onlayn Do'kon</span>
+              <Store className="w-4 h-4 text-orange-400" />
+              <span>Onlayn Vitrina</span>
             </div>
             <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
           </Link>
@@ -171,16 +172,16 @@ export default function Sidebar() {
       </nav>
 
       {/* User Info & Logout footer */}
-      <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex items-center justify-between gap-2">
+      <div className="p-3.5 border-t border-slate-800 bg-[#070A12] flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-xs border border-emerald-500/30 shrink-0">
-            {currentUser?.fullName?.slice(0, 2).toUpperCase() || "AD"}
+          <div className="w-8 h-8 rounded-full bg-orange-500/20 text-orange-400 font-black flex items-center justify-center text-xs border border-orange-500/30 shrink-0">
+            {currentUser?.fullName?.slice(0, 2).toUpperCase() || "HW"}
           </div>
           <div className="overflow-hidden">
-            <p className="text-xs font-semibold text-white truncate">
-              {currentUser?.fullName || "Admin"}
+            <p className="text-xs font-bold text-white truncate">
+              {currentUser?.fullName || "Abdullo (Admin)"}
             </p>
-            <p className="text-[10px] text-emerald-400 truncate">
+            <p className="text-[10px] text-orange-400 font-semibold truncate">
               {currentUser?.role || "ADMIN"}
             </p>
           </div>
